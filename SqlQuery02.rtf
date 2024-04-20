@@ -1,0 +1,47 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2636
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww14340\viewh13120\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf0 -- Investigate how many rentals exceed the rental duration\
+WITH t1 AS\
+(\
+SELECT \
+	fl.title, \
+	fl.length,\
+  	fl.rental_duration,\
+	AVG(DATE_PART('day',re.return_date -re.rental_date)) AS average_rental_days,\
+	CASE \
+		WHEN fl.length <= 60 THEN '1 hour or less'\
+		WHEN fl.length > 60 AND fl.length <= 90 THEN '1-1.5 hours'\
+		WHEN fl.length > 90 AND fl.length <= 120 THEN '1.5-2 hours'\
+		WHEN fl.length > 120 AND fl.length <=150 THEN '2-2.5 hours'\
+		WHEN fl.length > 150 AND fl.length <=180 THEN '2.5-3 hours'\
+		ELSE '3 hours or more' END AS movie_length_group\
+FROM film fl\
+FULL JOIN inventory inv ON fl.film_id = inv.film_id\
+FULL JOIN rental re ON re.inventory_id = inv.inventory_id\
+GROUP BY 1,2,3,5\
+ORDER BY 5\
+),\
+-- fill the missing data\
+t2 AS\
+(        \
+SELECT title, length, \
+		rental_duration, \
+		COALESCE(average_rental_days, AVG(average_rental_days) OVER (PARTITION BY 			movie_length_group)) 	AS filled_avg_rental_days, \
+		movie_length_group \
+FROM t1\
+),\
+t3 AS\
+(                 \
+SELECT movie_length_group,  \
+		CASE WHEN (filled_avg_rental_days > rental_duration) THEN 1 ELSE 0 END AS overdue, \
+		CASE WHEN (filled_avg_rental_days <= rental_duration) THEN 1 ELSE 0 END AS intime\
+FROM t2\
+)\
+SELECT movie_length_group, SUM(overdue) AS sum_overdue, SUM(intime) AS sum_intime \
+FROM t3\
+GROUP BY 1;                 }
